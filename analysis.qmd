@@ -1,0 +1,896 @@
+## Purpose
+The purpose of this file is to analyze the data collected from the survey and to present the findings in a clear and concise manner. The analysis will include descriptive statistics, visualizations, and any relevant insights that can be drawn from the data.
+
+## Data Ingestion
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(readxl)
+library(janitor)
+
+# Read the survey data
+# survey_data <- readxl::read_excel("data/Consumer Behavior towards Organic Food Comparative Study_ Poland vs Zimbabwe (Responses) (2) (1).xlsx") 
+
+survey_data <- readxl::read_excel("F:/playground/The-Theory-of-Cognitive-Affective-Mediation-and-The-Moderating-Hypothesis-of-Price-Barriers-/data/Consumer Behavior towards Organic Food Comparative Study_ Poland vs Zimbabwe (Responses) (2) (1).xlsx") 
+
+
+# View the structure of the data
+survey_data |>
+    tibble()
+
+
+```
+
+## Data Cleaning
+```{r}
+dim(survey_data)
+
+
+# survey_data |>
+#     filter(!is.na(select_your_language_wybierz_jezyk))|>
+#     count(select_your_language_wybierz_jezyk)
+
+
+
+# Define the mapping as a named list
+coalesce_map <- list(
+  consent = c(
+    "Do you agree to participate in this study after reading the information above?",
+    "Czy po zapoznaniu się z powyższymi informacjami wyraża Pan/Pani zgodę na udział w tym badaniu?"
+  ),
+  purchased_organic_last_12m = c(
+    "A1. Have you purchased or consumed any organic food products in the last 12 months?",
+    "A1. Czy w ciągu ostatnich 12 miesięcy kupował (a) Pan/Pani lub spożywał(a) produkty ekologiczne?"
+  ),
+  age = c('A2. Age:', 'A2. Wiek:'),
+    gender = c('A3. Gender', 'A3. Płeć:'),
+    education = c('A4. Highest Educational Level Completed:', 'A4. Najwyższy ukończony poziom wykształcenia:'),
+    household_econ = c('A5. How would you describe the economic situation of your household?', 'A5. Jak ocenia Pani/Pan sytuację ekonomiczną swojego gospodarstwa domowego?'),
+    employment = c('A6. Current Employment Status:', 'A6. Obecny status zatrudnienia:'),
+    country = c('A7. Country of Residence:', 'A7. Kraj zamieszkania:'),
+    awareness_duration = c('B1. How long have you been aware of organic food products?', 'B1. Od jakiego czasu zna Pan/i produkty żywności ekologicznej?'),
+    pct_income_food = c('B2. Approximately what percentage of your total monthly household income is spent on food?', 'B2. Jaki procent swojego całkowitego miesięcznego dochodu gospodarstwa domowego przeznacza Pan/i średnio na żywność?'),
+    pct_foodbudget_organic = c('B3. Of your total food budget, what percentage is typically spent on organic products?', 'B3. Jaki procent swojego budżetu przeznaczonego na żywność wydaje Pan/i średnio na produkty ekologiczne?'),
+    purchase_frequency = c('B4. How often do you typically purchase organic food?', 'B4. Jak często kupuje Pan/i żywność ekologiczną?'),
+    area_population = c('B5. What is the population size of your area of residence?', 'B5. Jaka jest wielkość populacji Pana/i miejsca zamieszkania?'),
+    buy_where = c('B6. Where do you most often buy organic food? (Select all that apply)', 'B6. Gdzie najczęściej kupuje Pan/i żywność ekologiczną? (Można wybrać kilka odpowiedzi)'),
+    buy_for_whom = c('B7. For whom do you primarily buy organic food? (Select all that apply)', 'B7. Dla kogo głównie kupuje Pan/i żywność ekologiczną? (Można wybrać kilka odpowiedzi)'),
+    identify_method = c('B8. What is your primary method for identifying organic products?', 'B8. Jaka jest Pana/i główna metoda identyfikacji produktów ekologicznych? (Proszę wybrać jedną odpowiedź)'),
+    c1_organic_belief = c('Part 1: Your Beliefs About Organic Food\r\nPlease indicate your level of agreement with the following statements based on your beliefs. [C1. Organic food is healthier than conventional food.]', 'Część 1: Przekonania na temat żywności ekologicznej\r\nProszę wskazać stopień zgodności z poniższymi stwierdzeniami, opierając się na swoich przekonaniach. [C1. Żywność ekologiczna jest zdrowsza niż konwencjonalna.]'),
+    c2_harmful_chemicals_belief = c('Part 1: Your Beliefs About Organic Food\r\nPlease indicate your level of agreement with the following statements based on your beliefs. [C2. Avoiding pesticides and harmful chemicals is a major advantage of organic food.]', 'Część 1: Przekonania na temat żywności ekologicznej\r\nProszę wskazać stopień zgodności z poniższymi stwierdzeniami, opierając się na swoich przekonaniach. [C2. Unikanie pestycydów i szkodliwych chemikaliów jest główną zaletą żywności ekologicznej.]'),
+    c3_environment_belief = c('Part 1: Your Beliefs About Organic Food\r\nPlease indicate your level of agreement with the following statements based on your beliefs. [C3. Organic farming is better for the environment.]', 'Część 1: Przekonania na temat żywności ekologicznej\r\nProszę wskazać stopień zgodności z poniższymi stwierdzeniami, opierając się na swoich przekonaniach. [C3. Rolnictwo ekologiczne jest lepsze dla środowiska]'),
+    c4_ethics_belief = c('Part 1: Your Beliefs About Organic Food\r\nPlease indicate your level of agreement with the following statements based on your beliefs. [C4. Organic farming ensures better ethical treatment of animals.]', 'Część 1: Przekonania na temat żywności ekologicznej\r\nProszę wskazać stopień zgodności z poniższymi stwierdzeniami, opierając się na swoich przekonaniach. [C4. Rolnictwo ekologiczne zapewnia bardziej etyczne traktowanie zwierząt.]'),
+    d1_organic_emotions = c( "Please indicate your level of agreement with the following statements based on your feelings. [D1. Organic food tastes better than non-organic food.]", "Proszę określić w jakim stopniu zgadza się Pan(i) z poniższymi stwierdzeniami, w oparciu o swoje odczucia. [D1. Żywność ekologiczna smakuje lepiej niż konwencjonalna.]"),
+    d2_assurance_emotion = c( "Please indicate your level of agreement with the following statements based on your feelings. [D2. I feel confident and reassured when I see an official organic certification label.]", "Proszę określić w jakim stopniu zgadza się Pan(i) z poniższymi stwierdzeniami, w oparciu o swoje odczucia. [D2. Czuję się pewnie i spokojnie, gdy widzę logo ekożywności]"),
+    d3_satisfaction_emotion = c( "Please indicate your level of agreement with the following statements based on your feelings. [D3. Buying organic food gives me a sense of personal satisfaction.]", "Proszę określić w jakim stopniu zgadza się Pan(i) z poniższymi stwierdzeniami, w oparciu o swoje odczucia. [D3. Zakup żywności ekologicznej daje mi poczucie osobistej satysfakcji.]"),
+    d4_health_worry_emotion = c( "Please indicate your level of agreement with the following statements based on your feelings. [D4. I feel worried about the long-term health effects of consuming conventional food.]", "Proszę określić w jakim stopniu zgadza się Pan(i) z poniższymi stwierdzeniami, w oparciu o swoje odczucia. [D4. Czuję się zaniepokojony/a długoterminowymi skutkami zdrowotnymi spożywania konwencjonalnej żywności.]"),
+    d5_trust_emotion = c( "Please indicate your level of agreement with the following statements based on your feelings. [D5. I feel a stronger sense of trust when I buy from a local farmer I know than from a certified supermarket product.]", "Proszę określić w jakim stopniu zgadza się Pan(i) z poniższymi stwierdzeniami, w oparciu o swoje odczucia. [D5. Czuję większe zaufanie, gdy kupuję od znanego mi lokalnego rolnika niż do certyfikowanego produktu z supermarketu.]"),
+    cert_ZW = c("C6. Zimbabwe Organic Certification Logo\r\nHow familiar are you with this logo?", "C6. Czy rozpoznaje Pan/i powyższe logo certyfikacji ekologicznej Zimbabwe?"),
+    cert_familiar = c("C7. How important is seeing an official organic certification logo when you shop?", "C7. Jak ważne jest dla Pana/Pani oficjalne logo certyfikatu ekologicznego podczas zakupów?", "C7. How important is seeing an official organic certification logo when you shop? 2", "C7. Jak ważne jest dla Pana/Pani widok oficjalnego logo certyfikatu ekologicznego podczas zakupów?"),
+    # cert_importance = c("C8. When shopping for food, how important is it for you that the product has an official organic certification label?", "C8. Jak ważne jest dla Pana(i), aby produkt posiadał oficjalne oznaczenie certyfikacji ekologicznej podczas zakupów spożywczych?"),
+    price_perception = c("E3. “Organic food is too expensive for my budget.”", "E3. Żywność ekologiczna jest dla mnie zbyt droga."),
+    f1_intent = c("F1. Compared to now, do you intend to increase your consumption of organic food in the future?", "F1. W porównaniu do obecnej sytuacji, czy zamierza Pan/Pani zwiększyć w przyszłości spożycie żywności ekologicznej?\r\n")
+)
+
+# survey_data |> dplyr::select(starts_with("A5")) |> names()
+
+# Coalesce columns
+for (canonical in names(coalesce_map)) {
+  cols <- coalesce_map[[canonical]]
+  survey_data[[canonical]] <- coalesce(!!!survey_data[cols])
+}
+
+# Optionally, remove the original columns
+# survey_data <- survey_data[, !(names(survey_data) %in% unlist(coalesce_map))]
+
+# Get only Polish and Zimbabwean respondents
+survey_data_clean <- survey_data |>
+    clean_names() |>
+    filter(country %in% c("Poland", "Polska", "Zimbabwe")) |>
+    mutate(country = case_when(
+        country %in% c("Poland", "Polska") ~ "Poland",
+        country == "Zimbabwe" ~ "Zimbabwe",
+        TRUE ~ country
+    ))
+
+# Clean gender variable
+survey_data_clean <- survey_data_clean |>
+  mutate(
+    gender_clean = case_when(
+      str_to_lower(gender) %in% c("female", "kobieta", "woman") ~ "Female",
+      str_to_lower(gender) %in% c("male", "mężczyzna", "mezczyzna", "man") ~ "Male",
+      TRUE ~ gender
+    )
+  )
+
+
+
+# select only 100 polish and 100 zimbabwean respondents
+set.seed(123) # For reproducibility
+survey_data_sample <- survey_data_clean |>
+    group_by(country) |>
+    slice_sample(n = 100) |>
+    ungroup()
+
+```
+
+
+```{r}
+required_pkgs <- c(
+  "tidyverse",   # data wrangling & visualisation
+  "lavaan",      # SEM & mediation (Ha1, Ha2)
+  "semPlot",     # SEM path diagrams
+  "mediation",   # causal mediation analysis
+  "lme4",        # mixed models
+  "interactions",# moderation plots (Ha3)
+  "sandwich",    # robust SEs
+  "lmtest",      # coefficient tests
+  "psych",       # composite reliability, alpha
+  "ggplot2",     # visualisation
+  "patchwork",   # combine plots
+  "broom",       # tidy model outputs
+  "modelsummary",# publication tables
+  "scales",      # axis formatting
+  "car"          # VIF, Anova
+)
+
+to_install <- required_pkgs[!required_pkgs %in% installed.packages()[,"Package"]]
+if (length(to_install)) install.packages(to_install, dependencies = TRUE)
+invisible(lapply(required_pkgs, library, character.only = TRUE))
+
+
+```
+
+
+### The Theory of Cognitive-Affective Mediation 
+
+`Alternative (H₁)`: Affective emotions are positively impacted by cognitive beliefs, which raise the frequency of purchases.
+`Null (H₀)`: Affective sentiments do not enhance the frequency of purchases, while cognitive ideas have no effect on affective feelings. 
+
+```{r}
+# ==================================================================
+# Define mapping for purchase frequency
+purchase_freq_map <- c(
+  "daily" = 5,
+  "codziennie" = 5,
+  "a few times a week" = 4,
+  "kilka razy w tygodniu" = 4,
+  "once a week" = 3,
+  "raz w tygodniu" = 3,
+  "2–3 times a month" = 2,
+  "2-3 razy w miesiącu" = 2,
+  "once a month" = 2,
+  "raz w miesiącu" = 2,
+  "less than once a month / occasionally" = 1,
+  "rzadziej niż raz w miesiącu / sporadycznie" = 1
+)
+
+# Clean and harmonize purchase frequency
+survey_data_clean_df <- survey_data_sample |>
+  mutate(
+    purchase_frequency_clean = str_to_lower(str_trim(purchase_frequency)),
+    purchase_frequency_clean = str_replace_all(purchase_frequency_clean, "–", "-"),
+    purchase_frequency_rank = purchase_freq_map[purchase_frequency_clean]
+  )
+
+# survey_data_clean_df %>% count(purchase_frequency_rank) |> print(n = Inf)
+
+# ==================================================================
+# library(dplyr)
+df_ha1 <- survey_data_clean_df %>%
+  dplyr::select(country, purchase_frequency_rank,
+  c1_organic_belief:c4_ethics_belief,
+  d1_organic_emotions:d5_trust_emotion) 
+
+# df_ha1 %>% dplyr::select(purchase_frequency_rank)
+
+# # Count values per cur_column
+# for (col in names(df_ha1)) {
+#   cat("\n---", col, "value counts ---\n")
+#   print(table(df_ha1[[col]], useNA = "ifany"))
+# }
+
+# Define Likert mapping (English + Polish)
+likert_map <- c(
+  "strongly disagree" = 1,
+  "disagree" = 2,
+  "neutral" = 3,
+  "agree" = 4,
+  "strongly agree" = 5,
+  "zdecydowanie nie zgadzam się" = 1,
+  "zdecydowanie się nie zgadzam" = 1,
+  "nie zgadzam się" = 2,
+  "raczej się nie zgadzam" = 2,
+  "neutralny" = 3,
+  "nie mam opinii" = 3,
+  "ani się zgadzam, ani się nie zgadzam" = 3,
+  "zgadzam się" = 4,
+  "raczej się zgadzam" = 4,
+  "strongly agree" = 5,
+  "zdecydowanie zgadzam się" = 5,
+  "zdecydowanie się zgadzam" = 5
+)
+
+# List columns to clean
+belief_emotion_cols <- c(
+  "c1_organic_belief", "c2_harmful_chemicals_belief", "c3_environment_belief", "c4_ethics_belief",
+  "d1_organic_emotions", "d2_assurance_emotion", "d3_satisfaction_emotion", "d4_health_worry_emotion", "d5_trust_emotion"
+)
+
+# Clean and convert to numeric
+df_ha1 <- survey_data_clean_df %>%
+  dplyr::select(country, purchase_frequency_rank,
+    c1_organic_belief, c2_harmful_chemicals_belief, c3_environment_belief, c4_ethics_belief,
+    d1_organic_emotions, d2_assurance_emotion, d3_satisfaction_emotion, d4_health_worry_emotion, d5_trust_emotion
+  ) %>%
+  mutate(across(all_of(belief_emotion_cols),
+    ~ likert_map[str_to_lower(str_trim(.))],
+    .names = "{.col}_num"
+  )) %>%
+  mutate(purchase_frequency_rank = case_when(
+    is.na(purchase_frequency_rank) ~ NA_integer_,
+    purchase_frequency_rank == 'Invalid Number' ~ NA_integer_,
+    TRUE ~ as.numeric(purchase_frequency_rank)
+  ))
+
+# Creating composite scores for Cognitive and Affective constructs
+df_ha1_df <- df_ha1 %>%
+  mutate(
+    Cognitive = rowMeans(cbind(
+      c1_organic_belief_num, c2_harmful_chemicals_belief_num,
+      c3_environment_belief_num, c4_ethics_belief_num
+    ), na.rm = TRUE),
+    Affective = rowMeans(cbind(
+      d1_organic_emotions_num, d2_assurance_emotion_num,
+      d3_satisfaction_emotion_num, d4_health_worry_emotion_num #, d5_trust_emotion_num
+    ), na.rm = TRUE)
+  )
+
+# Baron-Kenny mediation
+library(lmtest)
+library(sandwich)
+
+
+# Filter for complete cases
+mediation_data <- df_ha1_df %>%
+  dplyr::select(Cognitive, Affective, purchase_frequency_rank) %>%
+  drop_na()
+
+
+# Step 1: Cognitive → Purchase Frequency
+# bk1 <- lm(purchase_frequency_rank ~ Cognitive, data = df_ha1_df)
+bk1 <- lm(purchase_frequency_rank ~ Cognitive, data = mediation_data)
+coeftest(bk1, vcov = vcovHC(bk1, "HC3"))
+
+# Step 2: Cognitive → Affective
+# bk2 <- lm(Affective ~ Cognitive, data = df_ha1_df)
+bk2 <- lm(Affective ~ Cognitive, data = mediation_data)
+coeftest(bk2, vcov = vcovHC(bk2, "HC3"))
+
+# Step 3: Cognitive + Affective → Purchase Frequency
+# bk3 <- lm(purchase_frequency_rank ~ Cognitive + Affective, data = df_ha1_df)
+bk3 <- lm(purchase_frequency_rank ~ Cognitive + Affective, data = mediation_data)
+coeftest(bk3, vcov = vcovHC(bk3, "HC3"))
+
+
+# Fit models on mediation_data Mediation analysis
+library(mediation)
+set.seed(2025)
+med <- mediation::mediate(
+  model.m = bk2,
+  model.y = bk3,
+  treat = "Cognitive",
+  mediator = "Affective",
+  boot = TRUE,
+  sims = 2000,
+  boot.ci.type = "bca"
+)
+summary(med)
+
+# structural Equation Modelling
+#+ d5_trust_emotion_num
+library(lavaan)
+ha1_sem <- '
+  Cog =~ c1_organic_belief_num + c2_harmful_chemicals_belief_num + c3_environment_belief_num + c4_ethics_belief_num
+  Aff =~ d1_organic_emotions_num + d2_assurance_emotion_num + d3_satisfaction_emotion_num + d4_health_worry_emotion_num 
+
+  Aff           ~ a * Cog
+  purchase_frequency_rank ~ b * Aff + cp * Cog
+
+  indirect := a * b
+  total    := cp + (a * b)
+'
+
+# Prepare SEM data with all item columns
+sem_data <- df_ha1_df %>%
+  dplyr::select(
+    c1_organic_belief_num, c2_harmful_chemicals_belief_num,
+    c3_environment_belief_num, c4_ethics_belief_num,
+    d1_organic_emotions_num, d2_assurance_emotion_num,
+    d3_satisfaction_emotion_num, d4_health_worry_emotion_num, #d5_trust_emotion_num
+    Cognitive, Affective, purchase_frequency_rank
+  ) %>%
+  drop_na()
+
+# Fit SEM model
+ha1_fit <- sem(ha1_sem,
+               data = sem_data,
+               estimator = "ML",
+               se = "bootstrap",
+               bootstrap = 2000,
+               missing = "ml")
+
+library(semPlot)
+semPaths(ha1_fit, what = "std", 
+                layout = "circle", 
+                edge.label.cex = 1.2, nCharNodes = 0, 
+                sizeMan = 8,              
+                sizeLat = 10, title = FALSE)
+
+# Fitted Measures
+fitMeasures(ha1_fit, c("cfi", "tli", "rmsea", "srmr", "aic", "bic"))
+
+summary(ha1_fit, standardized = TRUE, ci = TRUE)
+
+# How to restructure?
+modificationIndices(ha1_fit, sort = TRUE, maximum.number = 10)
+```
+
+## The Theory of the Certification Trust Chain
+
+```{r}
+# purchase likelihood (F1. "I intend to increase my purchase of organic food in the next 6 months."),
+# certification familiarity (C5. EU Organic Logo (Used in Poland and the EU) How familiar are you with this logo? &  "C6. Zimbabwe Organic Certification Logo How familiar are you with this logo?"
+# confidence after purchase (D2: "I feel confident and reassured when I see an official organic certification label.")
+
+df_ha2_df <- survey_data_sample |> 
+    dplyr::rename(
+    c5_eu_logo_familiarity= c5_eu_organic_logo_used_in_poland_and_the_eu_how_familiar_are_you_with_this_logo,
+    zim_logo_familiarity = cert_zw,
+    organic_logo_importance = cert_familiar) |>
+    dplyr::select(f1_intent, zim_logo_familiarity, organic_logo_importance, c5_eu_logo_familiarity, d2_assurance_emotion)
+
+# printing distinct values from each column
+# # Count values per cur_column
+# for (col in names(df_ha2_df)) {
+#   cat("\n---", col, "value counts ---\n")
+#   print(table(df_ha2_df[[col]], useNA = "ifany"))
+# }
+
+f1_intent_map <- c(
+  "No, I intend to decrease it" = 1,
+  "I’m not sure" = 2,
+  "No, I will maintain the same level" = 3,
+  "Pozostanie na tym samym poziomie" = 3,
+  "Yes, slightly" = 4,
+  "Raczej tak" = 4,
+  "Yes, significantly" = 5,
+  "Zdecydowanie tak" = 5
+)
+
+# Harmonise
+df_ha2_df$f1_intent_num <- f1_intent_map[str_trim(df_ha2_df$f1_intent)]
+
+# Logo harmonisation
+logo_fam_map <- c(
+  "I do not recognize this logo at all" = 1,
+  "Nie, nie rozpoznaję tego logo" = 1,
+  "I have seen this logo but don’t know much about it" = 2,
+  "Widziałem/am je, ale niewiele o nim wiem" = 2,
+  "I recognize this logo and know what it means" = 3,
+  "Znam to logo i wiem, co oznacza" = 3
+)
+
+df_ha2_df$zim_logo_familiarity_num <- logo_fam_map[str_trim(df_ha2_df$zim_logo_familiarity)]
+df_ha2_df$c5_eu_logo_familiarity_num <- logo_fam_map[str_trim(df_ha2_df$c5_eu_logo_familiarity)]
+
+# Logo importance
+logo_importance_map <- c(
+  "Not important - It doesn't affect my purchasing decisions" = 1,
+  "Nieważne - Nie wpływa na moje decyzje zakupowe" = 1,
+  "I don't pay attention to certification logos" = 1,
+  "Nie zwracam uwagi na logo certyfikatów" = 1,
+  "Somewhat important - It influences my choice, but I sometimes buy uncertified" = 2,
+  "Dość ważne - Wpływa na mój wybór, ale czasem kupuję produkty niecertyfikowane" = 2,
+  "Very important - I look for it and usually only buy certified products" = 3
+)
+
+df_ha2_df$organic_logo_importance_num <- logo_importance_map[str_trim(df_ha2_df$organic_logo_importance)]
+
+
+# Mediation analysis
+# Purchase likelihood (f1_intent) is increased by certification familiarity (Zim logo familiarity and EU logo familiarity), which then boosts confidence after the purchase (Organic food importance).
+
+# Filter for complete cases
+mediation_data_2 <- df_ha2_df %>%
+  dplyr::select(f1_intent_num, c5_eu_logo_familiarity_num, zim_logo_familiarity_num, organic_logo_importance_num) %>%
+  drop_na()
+
+
+# Step 1: Certification familiarity → Purchase likelihood
+bk1_2 <- lm(f1_intent_num ~ c5_eu_logo_familiarity_num + zim_logo_familiarity_num, data = mediation_data_2)
+coeftest(bk1_2, vcov = vcovHC(bk1_2, "HC3"))
+
+# Step 2: Certification familiarity → Organic logo importance
+# bk2 <- lm(Affective ~ Cognitive, data = df_ha1_df)
+bk2_2 <- lm(organic_logo_importance_num ~ c5_eu_logo_familiarity_num + zim_logo_familiarity_num, data = mediation_data_2)
+coeftest(bk2_2, vcov = vcovHC(bk2_2, "HC3"))
+
+# Step 3: Certification familiarity + Organic logo importance → Purchase likelihood
+bk3_2 <- lm(f1_intent_num ~ c5_eu_logo_familiarity_num + zim_logo_familiarity_num + organic_logo_importance_num, data = mediation_data_2)
+coeftest(bk3_2, vcov = vcovHC(bk3_2, "HC3"))
+
+
+# Fit models on mediation_data Mediation analysis
+set.seed(2025)
+med_2 <- mediation::mediate(
+  model.m = bk2_2,
+  model.y = bk3_2,
+  treat = "c5_eu_logo_familiarity_num",
+  mediator = "organic_logo_importance_num",
+  boot = TRUE,
+  sims = 2000,
+  boot.ci.type = "bca"
+)
+summary(med_2)
+
+```
+
+## The Moderating Hypothesis of Price Barriers
+$Ha_3$: The Moderating Hypothesis of Price Barriers 
+`Alternative ($H_1$)`: The positive correlation between affective sentiments and purchase intentions is weakened by price perception, particularly for consumers with lower incomes.
+`Null ($H_0$)`: Regardless of economic level, the link between affective emotions and purchase intentions is not weakened by price perception. 
+
+
+```{r}
+
+# =============================================================================
+# Ha3: PRICE BARRIERS MODERATION
+# Affective Emotions × Price Perception → Purchase Intention (F1)
+# Moderated by Income Group (SES proxy)
+# =============================================================================
+
+# e3_zywnosc_ekologiczna_jest_dla_mnie_zbyt_droga
+# e3_organic_food_is_too_expensive_for_my_budget
+
+# Define Likert mapping (English + Polish)
+likert_map <- c(
+  "strongly disagree" = 1,
+  "disagree" = 2,
+  "neutral" = 3,
+  "agree" = 4,
+  "strongly agree" = 5,
+  "zdecydowanie nie zgadzam się" = 1,
+  "zdecydowanie się nie zgadzam" = 1,
+  "nie zgadzam się" = 2,
+  "raczej się nie zgadzam" = 2,
+  "neutralny" = 3,
+  "nie mam opinii" = 3,
+  "ani się zgadzam, ani się nie zgadzam" = 3,
+  "zgadzam się" = 4,
+  "raczej się zgadzam" = 4,
+  "strongly agree" = 5,
+  "zdecydowanie zgadzam się" = 5,
+  "zdecydowanie się zgadzam" = 5
+)
+
+affective_emotions_list <- c(
+  "d1_organic_emotions", "d2_assurance_emotion",
+  "d3_satisfaction_emotion", "d4_health_worry_emotion" #, "d5_trust_emotion"
+)
+
+
+# Harmonize and numerically code 'employment' column
+# Mapping both Polish and English values to numeric codes and English labels
+employment_map <- c(
+  'Employed full-time' = 1,
+  'Praca na pełny etat' = 1,
+  'Employed part-time' = 2,
+  'Praca w niepełnym wymiarze czasu' = 2,
+  'Self-employed / Freelancer' = 3,
+  'Bezrobotna/ny' = 4,
+  'Unemployed' = 4,
+  'Retired' = 5,
+  'Student' = 6,
+  'Homemaker' = 7,
+  'Osoba prowadząca gospodarstwo domowe' = 7
+)
+
+employment_label_map <- c(
+  'Employed full-time' = 'Employed full-time',
+  'Praca na pełny etat' = 'Employed full-time',
+  'Employed part-time' = 'Employed part-time',
+  'Praca w niepełnym wymiarze czasu' = 'Employed part-time',
+  'Self-employed / Freelancer' = 'Self-employed / Freelancer',
+  'Bezrobotna/ny' = 'Unemployed',
+  'Unemployed' = 'Unemployed',
+  'Retired' = 'Retired',
+  'Student' = 'Student',
+  'Homemaker' = 'Homemaker',
+  'Osoba prowadząca gospodarstwo domowe' = 'Homemaker'
+)
+
+survey_data_sample <- survey_data_sample |> mutate(
+  employment_num = employment_map[employment],
+  employment_label = employment_label_map[employment]
+)
+
+
+# Clean and convert to numeric
+df_ha3 <- survey_data_sample %>% 
+  dplyr::select(f1_intent, price_perception, employment_num,
+    all_of(affective_emotions_list)
+  ) %>%
+  mutate(across(all_of(affective_emotions_list),
+    ~ likert_map[str_to_lower(str_trim(.))],
+    .names = "{.col}_num"
+  )) 
+
+# Creating composite scores for Cognitive and Affective constructs
+df_ha3_df <- df_ha3 %>%
+  mutate(
+    Affective = rowMeans(cbind(
+      d1_organic_emotions_num, d2_assurance_emotion_num,
+      d3_satisfaction_emotion_num, d4_health_worry_emotion_num #, d5_trust_emotion_num
+    ), na.rm = TRUE)
+  )
+
+# Harmonize and numerically code 'price_perception' column
+# Mapping: Strongly disagree = 1, Disagree = 2, Neutral = 3, Agree = 4, Strongly agree = 5
+# Polish equivalents: 'Zdecydowanie się nie zgadzam' = 1, 'Nie zgadzam się' = 2, 'Ani się zgadzam, ani nie' = 3, 'Zgadzam się' = 4, 'Zdecydowanie się zgadzam' = 5
+# For multiple answers, take the mean of mapped values
+
+price_perception_map <- c(
+  'Strongly disagree' = 1,
+  'Disagree' = 2,
+  'Neutral' = 3,
+  'Agree' = 4,
+  'Strongly agree' = 5,
+  'Zdecydowanie się nie zgadzam' = 1,
+  'Nie zgadzam się' = 2,
+  'Ani się zgadzam, ani nie' = 3,
+  'Zgadzam się' = 4,
+  'Zdecydowanie się zgadzam' = 5
+)
+
+df_ha3_df <- df_ha3_df |> mutate(
+  price_perception_num = sapply(strsplit(price_perception, ','), function(x) {
+    x <- trimws(x)
+    vals <- price_perception_map[x]
+    as.numeric(vals[1]) # Use only the first mapped value
+  })
+)
+
+# Harmonize and numerically code 'household_econ' column
+# # Mapping: Poor = 1, Fair/Average/Przeciętna = 2, Good/Dobra = 3, Very good = 4
+# household_econ_map <- c(
+#   'Poor' = 1,
+#   'Dobra' = 3,
+#   'Good' = 3,
+#   'Fair/Average' = 2,
+#   'Przeciętna' = 2,
+#   'Very good' = 4
+# )
+
+# df_ha3_df <- df_ha3_df |> mutate(
+#   household_econ_num = household_econ_map[household_econ]
+# )
+
+# Check the result
+# df_ha3_df |> count(household_econ, household_econ_num)
+
+
+f1_intent_map <- c(
+  "No, I intend to decrease it" = 1,
+  "I’m not sure" = 2,
+  "No, I will maintain the same level" = 3,
+  "Pozostanie na tym samym poziomie" = 3,
+  "Yes, slightly" = 4,
+  "Raczej tak" = 4,
+  "Yes, significantly" = 5,
+  "Zdecydowanie tak" = 5
+)
+
+# Harmonise
+df_ha3_df$f1_intent_num <- f1_intent_map[str_trim(df_ha3_df$f1_intent)]
+
+# Check the result
+# df_ha3_df |> count(price_perception, price_perception_num)
+
+# survey_data_sample |> count(employment)
+
+
+
+# Check the result
+# survey_data_sample |> count(employment, employment_num, employment_label)
+
+# Droping rows with NA in key variables
+df_ha3_df <- df_ha3_df |> drop_na(f1_intent, Affective, price_perception_num, employment_num)
+
+df_ha3_df <- df_ha3_df |>
+  mutate(
+    Affective_c = Affective - mean(Affective, na.rm = TRUE),
+    E3_price_c = price_perception_num - mean(price_perception_num, na.rm = TRUE)
+  )
+
+
+# ── Ha3-A: Base 2-way moderation ──────────────────────────────────────────────
+ha3_base <- lm(f1_intent_num ~ Affective * price_perception_num, data = df_ha3_df)
+
+cat("\n--- Ha3 Base: Affective × Price → F1_intent ---\n")
+print(coeftest(ha3_base, vcov = vcovHC(ha3_base, "HC3")))
+cat(sprintf("R² = %.4f\n", summary(ha3_base)$r.squared))
+
+# ── Ha3-B: 3-way with income group ────────────────────────────────────────────
+ha3_3way <- lm(f1_intent_num ~ Affective * price_perception_num * employment_num, data = df_ha3_df)
+
+cat("\n--- Ha3 3-Way: Affective × Price × Employment → F1_intent ---\n")
+print(coeftest(ha3_3way, vcov = vcovHC(ha3_3way, "HC3")))
+cat(sprintf("R² = %.4f  ΔR² = %.4f\n",
+            summary(ha3_3way)$r.squared,
+            summary(ha3_3way)$r.squared - summary(ha3_base)$r.squared))
+
+# ── Ha3-C: Model comparison ─────`───────────────────────────────────────────────
+cat("\n--- Ha3: ANOVA model comparison ---\n")
+print(anova(ha3_base, ha3_3way))
+
+
+
+```
+
+## Hypothesis of Country-Specific Demographic Drivers 
+`Alternative ($H_1$)`: In both nations, socioeconomic position has a favorable impact on cognitive beliefs and purchase frequency, but it does so through distinct mechanisms—directly in Zimbabwe and indirectly through education and urban residency in Poland.
+`Null ($H_0$)`: Neither country's cognitive views nor purchase frequency are significantly impacted by socioeconomic position.
+
+Socioeconomic position (SEP) is defined by
+
+```{r}
+# =============================================================================
+# Ha4: COUNTRY-SPECIFIC DEMOGRAPHIC DRIVERS
+# Zimbabwe: SES → Cognitive / Purchase directly
+# Poland:   SES → (Educ + Urban) → Cognitive → Purchase (indirect pathway)
+# =============================================================================
+
+
+
+```
+
+
+```{r}
+
+# Variable legend:
+#  country        : "Poland" | "Zimbabwe"
+#  age            : midpoint years (21, 29, 39, 49, 62)
+#  gender         : Male / Female / Other
+#  education      : 1(Primary) … 5(Postgraduate)
+#  ses            : 1(Very poor) … 5(Very good)   [household SES]
+#  urban          : 0 = rural/small town, 1 = city/metropolitan
+#  purchase_freq  : 1(rarely) … 6(daily)
+#  cert_EU        : EU logo familiarity 1–3
+#  cert_ZW        : Zimbabwe logo familiarity 1–3
+#  cert_familiar  : country-appropriate logo familiarity 1–3
+#  cert_importance: 1–4 (how important certification is when shopping)
+#  C1–C4          : Cognitive beliefs (Likert 1–5)
+#  D1–D5          : Affective emotions (Likert 1–5)
+#  E3_price       : "Organic is too expensive" (1=SD … 5=SA)
+#  E5_avail       : Availability ease (1–5)
+#  F1_intent      : Purchase intention (1=decrease … 5=increase significantly)
+
+
+
+
+
+
+df_pol <- df |> filter(country == "Poland")
+df_zim <- df |> filter(country == "Zimbabwe")
+cat(sprintf("n(Poland) = %d  |  n(Zimbabwe) = %d\n", nrow(df_pol), nrow(df_zim)))
+
+# ── Ha4-A: OLS by country (robustness baseline) ───────────────────────────────
+cat("\n--- Ha4-A: Poland — SES, Education, Urban, Cognitive → Purchase_Freq ---\n")
+ols_pol <- lm(purchase_freq ~ ses + education + Urban_bin + Cognitive, data = df_pol)
+print(coeftest(ols_pol, vcov = vcovHC(ols_pol, "HC3")))
+
+cat("\n--- Ha4-A: Zimbabwe — same model ---\n")
+ols_zim <- lm(purchase_freq ~ ses + education + Urban_bin + Cognitive, data = df_zim)
+print(coeftest(ols_zim, vcov = vcovHC(ols_zim, "HC3")))
+
+# ── Ha4-B: Chow structural break test ─────────────────────────────────────────
+cat("\n--- Ha4-B: Chow Test — equal slopes across countries? ---\n")
+ols_pool <- lm(purchase_freq ~ ses + education + Urban_bin + Cognitive, data = df)
+rss_pool  <- sum(resid(ols_pool)^2)
+rss_split <- sum(resid(ols_pol)^2) + sum(resid(ols_zim)^2)
+k_chow    <- length(coef(ols_pool))
+n_chow    <- nrow(df)
+chow_F    <- ((rss_pool - rss_split) / k_chow) / (rss_split / (n_chow - 2 * k_chow))
+chow_p    <- pf(chow_F, df1 = k_chow, df2 = n_chow - 2 * k_chow, lower.tail = FALSE)
+cat(sprintf("Chow F(%d, %d) = %.4f  |  p = %.6f\n", k_chow, n_chow - 2*k_chow, chow_F, chow_p))
+
+# ── Ha4-C: Multi-group SEM ─────────────────────────────────────────────────────
+ha4_model <- '
+  # Education and urban as mediators (Poland pathway)
+  education  ~ m_edu  * ses
+  Urban_bin  ~ m_urb  * ses
+
+  # Cognitive beliefs
+  Cognitive  ~ a_ses  * ses + a_edu * education + a_urb * Urban_bin
+
+  # Purchase frequency
+  purchase_freq ~ b_cog * Cognitive + d_ses * ses
+
+  # Defined indirect effects
+  indirect_cog       := a_ses * b_cog
+  indirect_edu_cog   := m_edu * a_edu * b_cog
+  indirect_urb_cog   := m_urb * a_urb * b_cog
+  total_indirect_pol := indirect_edu_cog + indirect_urb_cog
+  total_ses_pf       := d_ses + indirect_cog + total_indirect_pol
+'
+
+# Free model (paths differ across countries)
+ha4_free <- sem(ha4_model, data = df, group = "Country",
+                estimator = "MLR", se = "bootstrap", bootstrap = 1000,
+                missing = "ml")
+
+# Constrained model (paths equal across countries)
+ha4_const <- sem(ha4_model, data = df, group = "Country",
+                 group.equal = "regressions",
+                 estimator = "MLR", se = "bootstrap", bootstrap = 1000,
+                 missing = "ml")
+
+cat("\n--- Ha4-C: Free (unconstrained) model fit ---\n")
+print(fitMeasures(ha4_free, c("cfi","tli","rmsea","srmr","aic","bic")))
+
+cat("\n--- Ha4-C: Fit comparison (constrained vs free) — Δχ² test ---\n")
+print(lavTestLRT(ha4_free, ha4_const))
+
+# Country-specific parameter estimates
+pe_free <- parameterEstimates(ha4_free, boot.ci.type = "bca.simple", ci = TRUE) |>
+  filter(op %in% c("~", ":=")) |>
+  select(lhs, op, rhs, group, est, se, pvalue, ci.lower, ci.upper)
+
+cat("\n--- Ha4-C: Poland paths (group 1) ---\n")
+print(pe_free |> filter(group == 1))
+
+cat("\n--- Ha4-C: Zimbabwe paths (group 2) ---\n")
+print(pe_free |> filter(group == 2))
+
+# ── Ha4-D: Mediation test — Poland: SES → Education → Cognitive → Purchase ────
+cat("\n--- Ha4-D: Poland mediation: SES → Education → Cognitive → Purchase ---\n")
+# Step 1: Education ~ SES (Poland)
+m1_pol <- lm(education  ~ ses, data = df_pol)
+# Step 2: Cognitive ~ SES + Education (Poland)
+m2_pol <- lm(Cognitive  ~ ses + education, data = df_pol)
+# Step 3: purchase_freq ~ SES + Education + Cognitive (Poland)
+m3_pol <- lm(purchase_freq ~ ses + education + Cognitive, data = df_pol)
+
+set.seed(2025)
+med_pol <- mediation::mediate(m1_pol, m2_pol,
+                               treat = "ses", mediator = "education",
+                               boot = TRUE, sims = 1000, boot.ci.type = "bca")
+cat("Poland: SES → Education mediation:\n")
+print(summary(med_pol))
+
+cat("\n--- Ha4-D: Zimbabwe mediation: SES → Cognitive → Purchase ---\n")
+m1_zim <- lm(Cognitive     ~ ses, data = df_zim)
+m2_zim <- lm(purchase_freq ~ ses + Cognitive, data = df_zim)
+set.seed(2025)
+med_zim <- mediation::mediate(m1_zim, m2_zim,
+                               treat = "ses", mediator = "Cognitive",
+                               boot = TRUE, sims = 1000, boot.ci.type = "bca")
+cat("Zimbabwe: SES → Cognitive mediation:\n")
+print(summary(med_zim))
+
+# ── Ha4-E: Decision ───────────────────────────────────────────────────────────
+lrt <- lavTestLRT(ha4_free, ha4_const)
+cat("\n>>> Ha4 DECISION:\n")
+cat(sprintf("  Chow F(%d, %d) = %.4f, p = %.6f\n", k_chow, n_chow-2*k_chow, chow_F, chow_p))
+if (chow_p < 0.05) {
+  cat("  Chow test: REJECT H₀ — structural break confirmed between countries.\n")
+}
+if (!is.null(lrt) && nrow(lrt) > 1) {
+  delta_chi <- lrt[["Chisq diff"]][2]
+  delta_p   <- lrt[["Pr(>Chisq)"]][2]
+  cat(sprintf("  Multi-group SEM Δχ²(free vs constrained) = %.3f, p = %.4f\n",
+              delta_chi, delta_p))
+  if (!is.na(delta_p) && delta_p < 0.05) {
+    cat("  REJECT H₀ — Path coefficients differ significantly across Poland and Zimbabwe.\n")
+  }
+}
+cat("\n  Check per-country path estimates above for mechanism specifics:\n")
+cat("  - Zimbabwe: direct ses → purchase_freq significant?\n")
+cat("  - Poland:   indirect (ses → education/urban → cognitive → purchase) significant?\n")
+
+# ── Ha4-F: Plot ───────────────────────────────────────────────────────────────
+coef_tbl <- bind_rows(
+  tidy(ols_pol, conf.int = TRUE) |> mutate(Country = "Poland"),
+  tidy(ols_zim, conf.int = TRUE) |> mutate(Country = "Zimbabwe")
+) |>
+  filter(term != "(Intercept)") |>
+  mutate(term = recode(term,
+    "ses"       = "SES",
+    "education" = "Education",
+    "Urban_bin" = "Urban",
+    "Cognitive" = "Cognitive Beliefs"
+  ))
+
+p_ha4 <- ggplot(coef_tbl,
+                aes(x = estimate, y = term, colour = Country,
+                    xmin = conf.low, xmax = conf.high)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
+  geom_pointrange(position = position_dodge(width = 0.6), size = 0.9, linewidth = 0.8) +
+  scale_colour_manual(values = c("Poland" = "#e41a1c", "Zimbabwe" = "#377eb8")) +
+  labs(
+    title    = "Ha4: Demographic Drivers of Purchase Frequency by Country",
+    subtitle = "OLS coefficients with 95% CIs",
+    x        = "Coefficient estimate", y = NULL
+  ) +
+  theme_minimal(base_size = 13)
+
+ggsave("Ha4_country_demographic_drivers.png", p_ha4,
+       width = 9, height = 5, dpi = 300)
+cat("Plot saved: Ha4_country_demographic_drivers.png\n")
+
+
+# =============================================================================
+# CONSOLIDATED RESULTS TABLE
+# =============================================================================
+cat("\n\n--- Consolidated OLS Table (all models) ---\n")
+modelsummary(
+  list(
+    "Ha1 Affect~Cog"   = bk2_ha1,
+    "Ha1 PF~Cog+Aff"   = bk3_ha1,
+    "Ha2 PF~Cert"      = bk2_ha2,
+    "Ha2 D2~Cert+PF"   = bk3_ha2,
+    "Ha3 Base Mod"     = ha3_base,
+    "Ha3 3-Way"        = ha3_3way,
+    "Ha4 Poland"       = ols_pol,
+    "Ha4 Zimbabwe"     = ols_zim
+  ),
+  statistic  = "({std.error}) [{conf.low}, {conf.high}]",
+  stars      = c("*" = .10, "**" = .05, "***" = .01),
+  vcov       = "HC3",
+  output     = "Hypothesis_Results_Table.docx"
+)
+cat("Results table saved → Hypothesis_Results_Table.docx\n")
+
+
+# =============================================================================
+# HYPOTHESIS DECISION SUMMARY
+# =============================================================================
+cat("
+================================================================================
+ HYPOTHESIS DECISION SUMMARY (α = .05)
+================================================================================
+
+ Ha1 — Cognitive-Affective Mediation
+   Reject H₀ IF:
+     (1) a-path (Cognitive → Affective):     β ≠ 0, p < .05
+     (2) b-path (Affective → PurchaseFreq):  β ≠ 0, p < .05
+     (3) ACME bootstrap 95% CI excludes 0
+   ⇒ Check: summary(ha1_med)  &  parameterEstimates(ha1_fit)
+
+ Ha2 — Certification Trust Chain
+   Reject H₀ IF:
+     (1) a-path (Cert → PurchaseFreq):         β ≠ 0, p < .05
+     (2) b-path (PurchaseFreq → Confidence):   β ≠ 0, p < .05
+     (3) ACME bootstrap 95% CI excludes 0
+     (4) Sobel |Z| > 1.96
+   ⇒ Check: summary(ha2_med)  &  Sobel output above
+
+ Ha3 — Price Barriers Moderation
+   Reject H₀ IF:
+     (1) Affective × Price interaction β < 0, p < .05
+     (2) Low-income simple slope for Affective < High-income slope
+     (3) Johnson-Neyman: price barrier values where moderation is significant
+   ⇒ Check: ha3_base coeftest  &  jn object
+
+ Ha4 — Country-Specific Demographic Drivers
+   Reject H₀ IF:
+     (1) Chow F: p < .05  → structural break confirmed
+     (2) Multi-group SEM Δχ²: p < .05  → paths differ by country
+     (3) Zimbabwe: direct ses → purchase_freq significant
+     (4) Poland: indirect SES → Educ/Urban → Cognitive → PF CI excludes 0
+   ⇒ Check: chow_F, chow_p  &  pe_free table  &  med_pol, med_zim
+
+================================================================================
+")
+```
