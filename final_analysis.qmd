@@ -1,0 +1,1049 @@
+---
+title: "final_analysis"
+format: docx
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+required_pkgs <- c(
+
+  "tidyverse",    # data wrangling & visualisation
+
+  "readxl",       # Excel ingestion
+
+  "janitor",      # clean_names()
+
+  "lavaan",       # SEM & CFA
+
+  "semPlot",      # SEM path diagrams
+
+  "mediation",    # bootstrapped causal mediation
+
+  "lmtest",       # coeftest()
+
+  "sandwich",     # HC3 robust standard errors
+
+  "interactions", # interact_plot(), johnson_neyman()
+
+  "psych",        # alpha(), describe()
+
+  "broom",        # tidy model outputs
+
+  "modelsummary", # publication-ready tables
+
+  "car"           # vif(), Anova()
+
+)
+
+to_install <- required_pkgs[!required_pkgs %in% installed.packages()[, "Package"]]
+
+if (length(to_install)) install.packages(to_install, dependencies = TRUE)
+
+invisible(lapply(required_pkgs, library, character.only = TRUE))
+
+# Resolve common namespace conflicts explicitly
+
+select  <- dplyr::select
+filter  <- dplyr::filter
+recode  <- dplyr::recode
+mediate <- mediation::mediate
+
+
+```
+
+```{r}
+LIKERTS <- c(
+  # English
+  "strongly disagree"                         = 1L,
+  "disagree"                                  = 2L,
+  "neutral"                                   = 3L,
+  "agree"                                     = 4L,
+  "strongly agree"                            = 5L,
+  # Polish variants
+  "zdecydowanie nie zgadzam się"              = 1L,
+  "zdecydowanie się nie zgadzam"              = 1L,
+  "nie zgadzam się"                           = 2L,
+  "raczej się nie zgadzam"                    = 2L,
+  "neutralny"                                 = 3L,
+  "nie mam opinii"                            = 3L,
+  "ani się zgadzam, ani się nie zgadzam"      = 3L,
+  "ani się zgadzam, ani nie"                  = 3L,
+  "zgadzam się"                               = 4L,
+  "raczej się zgadzam"                        = 4L,
+  "zdecydowanie zgadzam się"                  = 5L,
+  "zdecydowanie się zgadzam"                  = 5L
+)
+
+# ── 1.2  Purchase frequency ───────────────────────────────────────────────────
+
+PURCHASE_FREQ <- c(
+  "less than once a month / occasionally"               = 1L,
+  "rzadziej niż raz w miesiącu / sporadycznie"          = 1L,
+  "once a month"                                        = 2L,
+  "raz w miesiącu"                                      = 2L,
+  "2–3 times a month"                                   = 3L,
+  "2-3 razy w miesiącu"                                 = 3L,
+  "once a week"                                         = 4L,
+  "raz w tygodniu"                                      = 4L,
+  "a few times a week"                                  = 5L,
+  "kilka razy w tygodniu"                               = 5L,
+  "daily"                                               = 6L,
+  "codziennie"                                          = 6L
+)
+
+# ── 1.3  Purchase intention (F1) ──────────────────────────────────────────────
+
+F1_INTENT <- c(
+  "no, i intend to decrease it"      = 1L,
+  "i'm not sure"                     = 2L,
+  "no, i will maintain the same level" = 3L,
+  "pozostanie na tym samym poziomie" = 3L,
+  "yes, slightly"                    = 4L,
+  "raczej tak"                       = 4L,
+  "yes, significantly"               = 5L,
+  "zdecydowanie tak"                 = 5L
+)
+
+
+
+# ── 1.4  Certification logo familiarity ───────────────────────────────────────
+
+CERT_FAM <- c(
+  "i do not recognize this logo at all"              = 1L,
+  "nie, nie rozpoznaję tego logo"                    = 1L,
+  "i have seen this logo but don't know much about it" = 2L,
+  "widziałem/am je, ale niewiele o nim wiem"         = 2L,
+  "i recognize this logo and know what it means"     = 3L,
+  "znam to logo i wiem, co oznacza"                  = 3L
+)
+
+
+
+
+# ── 1.5  Certification / logo importance ─────────────────────────────────────
+
+CERT_IMP <- c(
+  "not important - it doesn't affect my purchasing decisions" = 1L,
+  "nieważne - nie wpływa na moje decyzje zakupowe"           = 1L,
+  "i don't pay attention to certification logos"             = 1L,
+  "nie zwracam uwagi na logo certyfikatów"                   = 1L,
+  "somewhat important - it influences my choice, but i sometimes buy uncertified" = 2L,
+  "dość ważne - wpływa na mój wybór, ale czasem kupuję produkty niecertyfikowane" = 2L,
+  "very important - i look for it and usually only buy certified products"         = 3L
+)
+
+
+
+# ── 1.6  Household economic situation (SES proxy) ────────────────────────────
+
+HOUSEHOLD_ECON <- c(
+  "poor"         = 1L,
+  "fair/average" = 2L,
+  "przeciętna"   = 2L,
+  "good"         = 3L,
+  "dobra"        = 3L,
+  "bardzo dobra" = 4L,
+  "very good"    = 4L
+)
+
+
+# ── 1.7  Employment status ────────────────────────────────────────────────────
+
+# EMPLOYMENT <- c(
+#   "Employed full-time"                        = 1L,
+#   "Praca na pełny etat"                       = 1L,
+#   "Employed part-time"                        = 2L,
+#   "Praca w niepełnym wymiarze czasu"          = 2L,
+#   "self-employed / Freelancer"                = 3L,
+#   "Unemployed"                                = 4L,
+#   "Bezrobotna/ny"                             = 4L,
+#   "Retired"                                   = 5L,
+#   "Student"                                   = 6L,
+#   "Homemaker"                                 = 7L,
+#   "Osoba prowadząca gospodarstwo domowe"      = 7L
+# )
+
+EMPLOYMENT <- c(
+  "employed full-time"                   = 5L,
+  "praca na pełny etat"                  = 5L,
+  "self-employed / freelancer"           = 5L,
+  "employed part-time"                   = 4L,
+  "praca w niepełnym wymiarze czasu"     = 4L,
+  "student"                              = 3L,
+  "homemaker"                            = 3L,
+  "osoba prowadząca gospodarstwo domowe" = 3L,
+  "retired"                              = 3L,
+  "unemployed"                           = 2L,
+  "bezrobotna/ny"                        = 2L,
+  "NA"                                   = 1L
+)
+
+
+
+
+
+# ── 1.8  Education ────────────────────────────────────────────────────────────
+
+EDUCATION <- c(
+  # Level 1: Primary
+  "primary or Less"                            = 1L,
+  "podstawowe"                                 = 1L,
+  
+  # Level 2: Vocational (Lower Secondary/Trade)
+  "szkoła zawodowa"                            = 2L, 
+  
+  # Level 3: Secondary / High School
+  "secondary/high school"                      = 3L,
+  "średnie / liceum / technikum"               = 3L,
+  "technical/vocational training"              = 3L, # Technikum is often here
+  "college"                                    = 3L,
+  
+  # Level 4: Bachelor's / Engineer
+  "bachelor's degree"                          = 4L,
+  "wykształcenie wyższe (licencjat/inżynier)"  = 4L,
+  
+  # Level 5: Master's or PhD
+  "master's degree or higher"                  = 5L,
+  "postgraduate Degree (masters, phd)"         = 5L,
+  "doctorate"                                  = 5L,
+  "wykształcenie wyższe (magister lub wyższe)" = 5L,
+  "magister lub wyższy"                        = 5L
+)
+
+
+
+```
+
+```{r}
+# ── 1.9  Colour palette (reused in all plots) ─────────────────────────────────
+
+COL_COUNTRY <- c("Poland" = "#e41a1c", "Zimbabwe" = "#377eb8")
+
+# ── 2.1  Read raw Excel ───────────────────────────────────────────────────────
+
+# Update the path to point to your local copy of the Excel file.
+
+raw <- readxl::read_excel(
+  "data/Consumer Behavior towards Organic Food Comparative Study_ Poland vs Zimbabwe (Responses) (2) (1).xlsx"
+)
+
+```
+
+```{r}
+# ── 2.2  Bilingual column coalescing ─────────────────────────────────────────
+
+# For each construct the survey has parallel English + Polish columns.
+
+# coalesce() picks the first non-NA value, so bilingual responses map
+
+# to a single canonical column.
+
+coalesce_map <- list(
+  consent = c("Do you agree to participate in this study after reading the information above?", "Czy po zapoznaniu się z powyższymi informacjami wyraża Pan/Pani zgodę na udział w tym badaniu?"),
+  purchased_last_12m    = c("A1. Have you purchased or consumed any organic food products in the last 12 months?", "  A1. Czy w ciągu ostatnich 12 miesięcy kupował (a) Pan/Pani lub spożywał(a) produkty ekologiczne?  "),
+  age = c("A2. Age:", "A2. Wiek:"),
+  gender = c("A3. Gender", "A3. Płeć:"),
+  education = c("A4. Highest Educational Level Completed:", "A4. Najwyższy ukończony poziom wykształcenia:"),
+  household_econ = c("A5. How would you describe the economic situation of your household?", "A5. Jak ocenia Pani/Pan sytuację ekonomiczną swojego gospodarstwa domowego?"),
+  employment = c("A6. Current Employment Status:", "A6. Obecny status zatrudnienia:"),
+  country = c("A7. Country of Residence:", "A7. Kraj zamieszkania:"),
+  awareness_duration = c("B1. How long have you been aware of organic food products?", "B1. Od jakiego czasu zna Pan/i produkty żywności ekologicznej?"),
+  pct_income_food = c("B2. Approximately what percentage of your total monthly household income is spent on food?", "B2. Jaki procent swojego całkowitego miesięcznego dochodu gospodarstwa domowego przeznacza Pan/i średnio na żywność?"),
+  pct_budget_organic = c("B3. Of your total food budget, what percentage is typically spent on organic products?", "B3. Jaki procent swojego budżetu przeznaczonego na żywność wydaje Pan/i średnio na produkty ekologiczne?"),
+  purchase_frequency = c("B4. How often do you typically purchase organic food?", "B4. Jak często kupuje Pan/i żywność ekologiczną?"),
+  area_population = c("B5. What is the population size of your area of residence?", "B5. Jaka jest wielkość populacji Pana/i miejsca zamieszkania?"),
+  buy_where = c("B6. Where do you most often buy organic food? (Select all that apply)", "B6. Gdzie najczęściej kupuje Pan/i żywność ekologiczną? (Można wybrać kilka odpowiedzi)"),
+  buy_for_whom = c("B7. For whom do you primarily buy organic food? (Select all that apply)", "B7. Dla kogo głównie kupuje Pan/i żywność ekologiczną? (Można wybrać kilka odpowiedzi)"),
+  identify_method = c("B8. What is your primary method for identifying organic products?", "B8. Jaka jest Pana/i główna metoda identyfikacji produktów ekologicznych? (Proszę wybrać jedną odpowiedź)"),
+  c1_organic_belief = c("Part 1: Your Beliefs About Organic Food\r\nPlease indicate your level of agreement with the following statements based on your beliefs. [C1. Organic food is healthier than conventional food.]", "Część 1: Przekonania na temat żywności ekologicznej\r\nProszę wskazać stopień zgodności z poniższymi stwierdzeniami, opierając się na swoich przekonaniach. [C1. Żywność ekologiczna jest zdrowsza niż konwencjonalna.]"),
+  c2_pesticides_belief  = c("Part 1: Your Beliefs About Organic Food\r\nPlease indicate your level of agreement with the following statements based on your beliefs. [C2. Avoiding pesticides and harmful chemicals is a major advantage of organic food.]", "Część 1: Przekonania na temat żywności ekologicznej\r\nProszę wskazać stopień zgodności z poniższymi stwierdzeniami, opierając się na swoich przekonaniach. [C2. Unikanie pestycydów i szkodliwych chemikaliów jest główną zaletą żywności ekologicznej.]"),
+  c3_environment_belief = c("Part 1: Your Beliefs About Organic Food\r\nPlease indicate your level of agreement with the following statements based on your beliefs. [C3. Organic farming is better for the environment.]", "Część 1: Przekonania na temat żywności ekologicznej\r\nProszę wskazać stopień zgodności z poniższymi stwierdzeniami, opierając się na swoich przekonaniach. [C3. Rolnictwo ekologiczne jest lepsze dla środowiska]"),
+  c4_ethics_belief = c("Part 1: Your Beliefs About Organic Food\r\nPlease indicate your level of agreement with the following statements based on your beliefs. [C4. Organic farming ensures better ethical treatment of animals.]",
+"Część 1: Przekonania na temat żywności ekologicznej\r\nProszę wskazać stopień zgodności z poniższymi stwierdzeniami, opierając się na swoich przekonaniach. [C4. Rolnictwo ekologiczne zapewnia bardziej etyczne traktowanie zwierząt.]"),
+cert_eu = c("C5. EU Organic Logo (Used in Poland and the EU)\r\nHow familiar are you with this logo?", "Proszę zapoznać się z poniższymi logo certyfikatów ekologicznych i odpowiedzieć na pytania.\r\nPICTURE OF EU ORGANIC LOGO\r\nrozpoznaje Pan/i powyższe logo ekologiczne UE?"),
+cert_zw = c("C6. Zimbabwe Organic Certification Logo\r\nHow familiar are you with this logo?", "C6. Czy rozpoznaje Pan/i powyższe logo certyfikacji ekologicznej Zimbabwe?"),
+cert_importance = c("C7. How important is seeing an official organic certification logo when you shop?", "C7. Jak ważne jest dla Pana/Pani oficjalne logo certyfikatu ekologicznego podczas zakupów?"),
+d1_taste_emotion = c("Please indicate your level of agreement with the following statements based on your feelings. [D1. Organic food tastes better than non-organic food.]", "Proszę określić w jakim stopniu zgadza się Pan(i) z poniższymi stwierdzeniami, w oparciu o swoje odczucia. [D1. Żywność ekologiczna smakuje lepiej niż konwencjonalna.]"),
+d2_assurance_emotion  = c("Please indicate your level of agreement with the following statements based on your feelings. [D2. I feel confident and reassured when I see an official organic certification label.]","Proszę określić w jakim stopniu zgadza się Pan(i) z poniższymi stwierdzeniami, w oparciu o swoje odczucia. [D2. Czuję się pewnie i spokojnie, gdy widzę logo ekożywności]"),
+
+  d3_satisfaction_emotion = c("Please indicate your level of agreement with the following statements based on your feelings. [D3. Buying organic food gives me a sense of personal satisfaction.]", "Proszę określić w jakim stopniu zgadza się Pan(i) z poniższymi stwierdzeniami, w oparciu o swoje odczucia. [D3. Zakup żywności ekologicznej daje mi poczucie osobistej satysfakcji.]"),
+d4_health_worry = c("Please indicate your level of agreement with the following statements based on your feelings. [D4. I feel worried about the long-term health effects of consuming conventional food.]", "Proszę określić w jakim stopniu zgadza się Pan(i) z poniższymi stwierdzeniami, w oparciu o swoje odczucia. [D4. Czuję się zaniepokojony/a długoterminowymi skutkami zdrowotnymi spożywania konwencjonalnej żywności.]"), 
+d5_local_trust = c("Please indicate your level of agreement with the following statements based on your feelings. [D5. I feel a stronger sense of trust when I buy from a local farmer I know than from a certified supermarket product.]", "Proszę określić w jakim stopniu zgadza się Pan(i) z poniższymi stwierdzeniami, w oparciu o swoje odczucia. [D5. Czuję większe zaufanie, gdy kupuję od znanego mi lokalnego rolnika niż do certyfikowanego produktu z supermarketu.]"), 
+price_perception = c("E3. \u201cOrganic food is too expensive for my budget.\u201d", "E3. Żywność ekologiczna jest dla mnie zbyt droga."),
+f1_intent = c("F1. Compared to now, do you intend to increase your consumption of organic food in the future?", "F1. W porównaniu do obecnej sytuacji, czy zamierza Pan/Pani zwiększyć w przyszłości spożycie żywności ekologicznej?\n"))
+
+# Apply coalescing: for each canonical name, combine bilingual columns
+
+for (canonical in names(coalesce_map)) {
+  cols <- coalesce_map[[canonical]]
+  valid_cols  <- cols[cols %in% names(raw)]          # only keep cols that exist
+  raw[[canonical]] <- do.call(coalesce, raw[valid_cols])
+}
+```
+
+## Data Cleaning
+
+```{r}
+
+
+# ── 3.1  Helper: apply a named lookup vector (case-insensitive) ───────────────
+
+# This replaces all repeated instances of map[str_to_lower(str_trim(x))].
+
+apply_map <- function(x, lookup) {
+  lookup[str_to_lower(str_trim(as.character(x)))]
+}
+
+# ── 3.2  Filter to Poland & Zimbabwe; standardise country labels ──────────────
+
+df <- raw |>
+  clean_names() |>
+  filter(country %in% c("Poland", "Polska", "Zimbabwe")) |>
+  mutate(
+    country = if_else(country == "Polska", "Poland", country),
+    country = factor(country, levels = c("Poland", "Zimbabwe"))
+  )
+
+# ── 3.3  Balanced sample: 100 per country ─────────────────────────────────────
+
+set.seed(123)
+df <- df |>
+  group_by(country) |>
+  slice_sample(n = 100) |>
+  ungroup()
+
+cat(sprintf("\nSample: %d total (%s)\n", nrow(df),
+            paste(names(table(df$country)), table(df$country), sep = " = ",
+                  collapse = " | ")))
+
+# ── 3.4  Apply all lookup mappings ────────────────────────────────────────────
+
+# Likert items: C1–C4 (cognitive beliefs) and D1–D5 (affective emotions)
+
+cognitive_cols <- c("c1_organic_belief", "c2_pesticides_belief",
+                    "c3_environment_belief", "c4_ethics_belief")
+
+affective_cols <- c("d1_taste_emotion", "d2_assurance_emotion",
+                    "d3_satisfaction_emotion", "d4_health_worry")
+
+# Note: d5_local_trust excluded from composite (cross-loads; see MIs below)
+
+likert_cols <- c(cognitive_cols, affective_cols)
+
+df <- df |> 
+  # Likert items → numeric
+  mutate(across(all_of(likert_cols),
+                ~ as.integer(apply_map(.x, LIKERTS)),
+                .names = "{.col}_n")) |>
+  # Purchase frequency → ordinal 1–6
+  mutate(
+    purchase_frequency_clean = str_replace_all(
+      str_to_lower(str_trim(purchase_frequency)), "–", "-"),
+    purchase_freq_n = as.integer(PURCHASE_FREQ[purchase_frequency_clean])
+  ) |>
+  # F1 purchase intention → ordinal 1–5
+  mutate(
+    f1_intent_n = as.integer(
+      apply_map(f1_intent, F1_INTENT))
+  ) |>
+  # Certification familiarity (EU & ZW) → 1–3
+  mutate(
+    cert_eu_n    = as.integer(apply_map(cert_eu, CERT_FAM)),
+    cert_zw_n    = as.integer(apply_map(cert_zw, CERT_FAM)),
+    cert_imp_n   = as.integer(apply_map(cert_importance, CERT_IMP))
+  ) |>
+  # Socioeconomic proxies
+  mutate(
+    household_econ_n = as.integer(apply_map(household_econ, HOUSEHOLD_ECON)),
+    employment_n     = as.integer(apply_map(employment, EMPLOYMENT)),
+    education_n      = as.integer(apply_map(education, EDUCATION))
+  ) |>
+  # Price perception: take first response only (handles multi-select edge cases)
+  mutate(
+    price_perception_n = as.integer(
+      apply_map(str_extract(price_perception, "^[^,]+"), LIKERTS))
+  ) |>
+  # Country-appropriate certification familiarity
+  mutate(
+    cert_familiar_n = if_else(country == "Poland", cert_eu_n, cert_zw_n)
+  ) |>
+  # Gender harmonisation
+  mutate(
+    gender_clean = case_when(
+      str_to_lower(gender) %in% c("female", "kobieta", "woman") ~ "Female",
+      str_to_lower(gender) %in% c("male",   "mężczyzna", "man") ~ "Male",
+      TRUE ~ "Other / Prefer not to say"
+    )
+  )
+
+
+```
+
+```{r}
+# ── 4.1  Cognitive and Affective composites ───────────────────────────────────
+
+cog_items <- paste0(cognitive_cols, "_n")   # c1…c4_n
+aff_items <- paste0(affective_cols, "_n")   # d1…d4_n  (d5 excluded)
+
+df <- df |>
+  mutate(
+    Cognitive = rowMeans(across(all_of(cog_items)), na.rm = TRUE),
+    Affective = rowMeans(across(all_of(aff_items)), na.rm = TRUE),
+    # Mean-centred versions for moderation models (Ha3) to reduce multicollinearity
+    Affective_c = Affective       - mean(Affective,         na.rm = TRUE),
+    price_c = price_perception_n - mean(price_perception_n, na.rm = TRUE),
+    # SEP composite (Ha4): mean of household SES, education, employment
+    SEP = rowMeans(across(c(household_econ_n, education_n, employment_n)), na.rm = TRUE)
+  )
+
+# ── 4.2  Internal consistency ─────────────────────────────────────────────────
+
+cat("\n--- Reliability ---\n")
+cat("Cognitive Beliefs (C1–C4): α =",
+    round(psych::alpha(df[, cog_items], na.rm = TRUE)$total$raw_alpha, 3), "\n")
+cat("Affective Emotions (D1–D4): α =",
+    round(psych::alpha(df[, aff_items], na.rm = TRUE)$total$raw_alpha, 3), "\n")
+
+# ── 4.3  Descriptive overview ─────────────────────────────────────────────────
+
+cat("\n--- Descriptive Statistics ---\n")
+df |> 
+  select(Cognitive, Affective, purchase_freq_n, cert_familiar_n,
+         price_perception_n, f1_intent_n, SEP, education_n) |>
+  psych::describe() |>
+  round(2) |>
+  print()
+
+
+
+
+
+```
+
+```{r}
+# ── 5.1  Pretty section header ────────────────────────────────────────────────
+
+section <- function(title) {
+  bar <- strrep("=", 60)
+  cat("\n\n", bar, "\n ", title, "\n", bar, "\n", sep = "")
+}
+
+# ── 5.2  Robust coefficient test with HC3 SEs ─────────────────────────────────
+
+# Returns the coeftest object AND prints it with a label.
+
+rob_test <- function(model, label = "") {
+  if (nchar(label) > 0) cat("\n---", label, "---\n")
+  ct <- coeftest(model, vcov = vcovHC(model, "HC3"))
+  print(ct)
+  invisible(ct)
+}
+
+# ── 5.3  Bootstrapped mediation (wrapper to keep sims consistent) ─────────────
+
+run_mediation <- function(model_m, model_y, treat, mediator,
+                           sims = 2000, seed = 2025) {
+  set.seed(seed)
+  med_out <- mediate(
+    model.m       = model_m,
+    model.y       = model_y,
+    treat         = treat,
+    mediator      = mediator,
+    boot          = TRUE,
+    sims          = sims,
+    boot.ci.type  = "bca"
+  )
+
+  print(summary(med_out))
+  invisible(med_out)
+}
+
+# ── 5.4  Sobel Z-test ─────────────────────────────────────────────────────────
+
+sobel_test <- function(model_a, treat, model_b, mediator) {
+  a    <- coef(model_a)[treat]
+  b    <- coef(model_b)[mediator]
+  se_a <- sqrt(vcov(model_a)[treat,    treat])
+  se_b <- sqrt(vcov(model_b)[mediator, mediator])
+  z    <- (a * b) / sqrt(b^2 * se_a^2 + a^2 * se_b^2)
+  p    <- 2 * pnorm(-abs(z))
+  cat(sprintf("\n--- Sobel Test ---\n  Z = %.4f  |  p = %.4f\n", z, p))
+  invisible(list(z = z, p = p))
+}
+
+# ── 5.5  SEM fit summary ──────────────────────────────────────────────────────
+
+sem_fit_summary <- function(fit, label = "") {
+  if (nchar(label) > 0) cat("\n---", label, "---\n")
+  cat("Fit indices:\n")
+  print(fitMeasures(fit, c("cfi", "tli", "rmsea", "srmr", "aic", "bic")))
+  invisible(fit)
+}
+
+# ── 5.6  Extract & print labelled SEM paths ───────────────────────────────────
+
+sem_paths <- function(fit, labels) {
+  parameterEstimates(fit, boot.ci.type = "bca.simple", ci = TRUE,
+                     standardized = TRUE) |>
+    filter(label %in% labels) |>
+    select(label, est, se, z, pvalue, ci.lower, ci.upper, std.all) |>
+    print()
+}
+
+# ── 5.7  H₀ rejection decision for indirect effect ───────────────────────────
+
+decide_indirect <- function(fit, label = "indirect") {
+  est <- parameterEstimates(fit, boot.ci.type = "bca.simple", ci = TRUE) |>
+    filter(.data$label == !!label)
+  cat(sprintf("\n>>> Decision (%s): est = %.3f [%.3f, %.3f]  p = %.4f\n",
+              label, est$est, est$ci.lower, est$ci.upper, est$pvalue))
+  if (est$ci.lower > 0 | est$ci.upper < 0) {
+    cat("    REJECT H\u2080 \u2014 CI excludes zero.\n")
+  } else {
+    cat("    FAIL TO REJECT H\u2080 \u2014 CI includes zero.\n")
+  }
+
+  invisible(est)
+
+}
+
+# ── 5.8  Consistent ggplot2 theme ─────────────────────────────────────────────
+
+theme_study <- function(base_size = 13) {
+  theme_minimal(base_size = base_size) +
+    theme(plot.title    = element_text(face = "bold"),
+          plot.subtitle = element_text(colour = "grey40"),
+          strip.text    = element_text(face = "bold"))
+}
+
+```
+
+## **The Theory of Cognitive-Affective Mediation** 
+
+`Alternative (H₁)`: Affective emotions are positively impacted by cognitive beliefs, which raise the frequency of purchases.
+
+`Null (H₀)`: Affective sentiments do not enhance the frequency of purchases, while cognitive ideas have no effect on affective feelings.
+
+```{r}
+
+#| fig-width: 10
+#| fig-height: 8
+#| fig-align: "center"
+
+
+# 6.  Ha1: THEORY OF COGNITIVE-AFFECTIVE MEDIATION
+#
+#  Path:  Cognitive Beliefs (C1–C4)
+#            → Affective Emotions (D1–D4)   [a-path]
+#            → Purchase Frequency           [b-path]
+#  Also tests direct path Cognitive → Purchase (c'-path)
+# 
+
+ha1_data <- df |>
+  select(country, all_of(c(cog_items, aff_items)),
+         Cognitive, Affective, purchase_freq_n) |>
+  drop_na()
+
+cat(sprintf("\nHa1 n = %d\n", nrow(ha1_data)))
+
+# ── 6.2  Baron-Kenny steps ────────────────────────────────────────────────────
+
+# Step 1: total effect — Cognitive → Purchase
+
+bk1 <- lm(purchase_freq_n ~ Cognitive, data = ha1_data)
+rob_test(bk1, "Step 1 – Total effect: Cognitive → Purchase_Freq")
+
+# Step 2: a-path — Cognitive → Affective
+
+bk2 <- lm(Affective ~ Cognitive, data = ha1_data)
+rob_test(bk2, "Step 2 – a-path: Cognitive → Affective")
+
+# Step 3: b & c' paths — Cognitive + Affective → Purchase
+
+bk3 <- lm(purchase_freq_n ~ Cognitive + Affective, data = ha1_data)
+rob_test(bk3, "Step 3 – b & c' paths: Cognitive + Affective → Purchase_Freq")
+
+# ── 6.3  Bootstrapped mediation ───────────────────────────────────────────────
+
+cat("\n--- Ha1: Bootstrapped ACME / ADE / Total ---\n")
+ha1_med <- run_mediation(bk2, bk3, treat = "Cognitive", mediator = "Affective")
+# ── 6.4  SEM with CFA measurement model ──────────────────────────────────────
+
+# Using ML estimator (MLR available but requires FIML; drop_na used above)
+
+ha1_sem_spec <- '
+  # Measurement model
+  Cog =~ c1_organic_belief_n + c2_pesticides_belief_n +
+         c3_environment_belief_n + c4_ethics_belief_n
+  Aff =~ d1_taste_emotion_n + d2_assurance_emotion_n +
+         d3_satisfaction_emotion_n + d4_health_worry_n
+
+  # Structural model
+  Aff           ~ a  * Cog
+  purchase_freq_n ~ b  * Aff + cp * Cog
+  # Derived effects
+  indirect := a * b
+  total    := cp + (a * b)
+'
+
+ha1_fit <- sem(ha1_sem_spec, data = ha1_data,
+               estimator  = "ML",
+               se         = "bootstrap",
+               bootstrap  = 2000)
+
+sem_fit_summary(ha1_fit, "Ha1 SEM Fit Indices")
+
+cat("\n--- Ha1: Structural path estimates ---\n")
+sem_paths(ha1_fit, c("a", "b", "cp", "indirect", "total"))
+
+decide_indirect(ha1_fit, "indirect")
+
+# ── 6.5  SEM path diagram ─────────────────────────────────────────────────────
+
+semPlot::semPaths(ha1_fit, what = "std", layout = "circle",
+                  edge.label.cex = 1.2, nCharNodes = 0,
+                  sizeMan = 8, sizeLat = 10, title = FALSE)
+
+# ── 6.6  Modification indices (for model improvement guidance) ────────────────
+
+cat("\n--- Ha1: Top 10 modification indices ---\n")
+modificationIndices(ha1_fit, sort. = TRUE, maximum.number = 10) |> 
+  print()
+
+# ── 6.7  Plot ─────────────────────────────────────────────────────────────────
+
+ggplot(ha1_data, aes(x = Cognitive, y = purchase_freq_n)) +
+  geom_jitter(aes(colour = Affective), alpha = 0.55, width = 0.04, height = 0.15) +
+  geom_smooth(method = "lm", se = TRUE, colour = "#2171b5", linewidth = 1) +
+  scale_colour_gradient(low = "#deebf7", high = "#08306b", name = "Affective\nScore") +
+  facet_wrap(~country) +
+  labs(
+    title    = "Ha1: Cognitive Beliefs → Purchase Frequency",
+    subtitle = "Point shade = Affective Emotion composite; line = OLS fit",
+    x = "Cognitive Beliefs (mean score)", y = "Purchase Frequency (1–6)"
+  ) +
+  theme_study()
+
+# ggsave("Ha1_cognitive_affective_mediation.png", p_ha1,
+#        width = 10, height = 5, dpi = 300)
+
+
+
+
+```
+
+## The Theory of the Certification Trust Chain
+
+`Alternative (`H₁`)`: Purchase likelihood is increased by certification familiarity, which then boosts confidence after the purchase.
+
+`Null (``H₀``)`: buy experience does not boost post-buy confidence, and certification familiarity does not raise purchase likelihood.
+
+```{r}
+#| fig-width: 10
+#| fig-height: 8
+#| fig-align: "center"
+
+
+# 7.  Ha2: THEORY OF THE CERTIFICATION TRUST CHAIN
+#
+#  Path:  Cert Familiarity (C5/C6)
+#            → Purchase Frequency (B4)          [a-path]
+#            → Post-purchase Confidence (D2)    [b-path]
+#  D2 ("I feel confident when I see an organic cert label") is the
+#  closest available proxy for post-purchase confidence.
+
+
+# ── 7.1  Complete-case dataset for Ha2 ────────────────────────────────────────
+
+ha2_data <- df |>
+  select(country, cert_eu_n, cert_zw_n, cert_familiar_n,
+         cert_imp_n, d2_assurance_emotion_n, purchase_freq_n, f1_intent_n) |>
+  drop_na()
+
+cat(sprintf("\nHa2 n = %d\n", nrow(ha2_data)))
+
+# ── 7.2  Baron-Kenny steps ────────────────────────────────────────────────────
+
+# Step 1: total effect — Cert familiarity → Post-purchase confidence (D2)
+
+bk1_ha2 <- lm(d2_assurance_emotion_n ~ cert_eu_n + cert_zw_n, data = ha2_data)
+rob_test(bk1_ha2, "Step 1 – Total: Cert familiarity → D2 confidence")
+
+# Step 2: a-path — Cert familiarity → Purchase frequency
+
+bk2_ha2 <- lm(purchase_freq_n ~ cert_eu_n + cert_zw_n, data = ha2_data)
+rob_test(bk2_ha2, "Step 2 – a-path: Cert familiarity → Purchase_Freq")
+
+# Step 3: b & c' paths — Cert + Purchase → D2
+
+bk3_ha2 <- lm(d2_assurance_emotion_n ~ cert_eu_n + cert_zw_n + purchase_freq_n,
+               data = ha2_data)
+
+rob_test(bk3_ha2, "Step 3 – b & c' paths: Cert + Purchase → D2 confidence")
+
+# ── 7.3  Sobel test ───────────────────────────────────────────────────────────
+
+# Using EU logo as primary treatment (ZW logo held in model as covariate)
+
+sobel_test(bk2_ha2, treat = "cert_eu_n", model_b = bk3_ha2, mediator = "purchase_freq_n")
+
+# ── 7.4  Bootstrapped mediation ───────────────────────────────────────────────
+
+cat("\n--- Ha2: Bootstrapped ACME / ADE / Total (EU logo → Purchase → Confidence) ---\n")
+
+ha2_med <- run_mediation(bk2_ha2, bk3_ha2,
+                          treat    = "cert_eu_n",
+                          mediator = "purchase_freq_n")
+
+# ── 7.5  SEM ──────────────────────────────────────────────────────────────────
+
+ha2_sem_spec <- '
+  purchase_freq_n         ~ a2 * cert_eu_n + a2z * cert_zw_n
+  d2_assurance_emotion_n  ~ b2 * purchase_freq_n +
+                             c2 * cert_eu_n + c2z * cert_zw_n
+  indirect2 := a2 * b2
+  total2    := c2 + (a2 * b2)
+'
+
+ha2_fit <- sem(ha2_sem_spec, data = ha2_data,
+               estimator = "ML", se = "bootstrap", bootstrap = 2000)
+
+sem_fit_summary(ha2_fit, "Ha2 SEM Fit Indices")
+
+cat("\n--- Ha2: Path estimates ---\n")
+sem_paths(ha2_fit, c("a2", "b2", "c2", "indirect2", "total2"))
+
+decide_indirect(ha2_fit, "indirect2")
+
+# ── 7.6  Plot ─────────────────────────────────────────────────────────────────
+
+ha2_data |>
+  mutate(cert_label = factor(cert_familiar_n,
+                             levels = 1:3,
+                             labels = c("Unrecognised", "Seen", "Familiar"))) |>
+
+  ggplot(aes(x = cert_label, y = d2_assurance_emotion_n)) +
+  geom_boxplot(aes(fill = cert_label), alpha = 0.7, show.legend = FALSE) +
+  scale_fill_brewer(palette = "Greens") +
+  facet_wrap(~country) +
+  labs(
+    title    = "Ha2: Certification Familiarity → Post-purchase Confidence (D2)",
+    subtitle = "Country-appropriate logo (EU for Poland; ZW for Zimbabwe)",
+    x = "Certification Familiarity", y = "D2 Confidence Score (1–5)"
+  ) +
+  theme_study()
+
+# ggsave("Ha2_cert_trust_chain.png", p_ha2, width = 10, height = 5, dpi = 300)
+
+
+```
+
+## The Moderating Hypothesis of Price Barriers
+
+`Alternative (H₁)`: The positive correlation between affective sentiments and purchase intentions is weakened by price perception, particularly for consumers with lower incomes.
+
+`Null (H₀)`: Regardless of economic level, the link between affective emotions and purchase intentions is not weakened by price perception.
+
+```{r}
+#| fig-width: 10
+#| fig-height: 8
+#| fig-align: "center"
+
+# 8.  Ha3: MODERATING HYPOTHESIS OF PRICE BARRIERS
+
+#  Model:  F1_intent ~ Affective × Price_Perception × Employment_Group
+#  Ha3 tests whether high price perception weakens the positive
+#  Affective → Intent link, especially among lower-SES consumers.
+#  Mean-centred predictors reduce multicollinearity in interaction terms.
+# 
+ha3_data <- df |> 
+  select(country, Affective, Affective_c, price_perception_n, price_c,
+         employment_n, f1_intent_n) |>
+  drop_na()
+
+cat(sprintf("\nHa3 n = %d\n", nrow(ha3_data)))
+
+# ── 8.2  Base 2-way moderation: Affective × Price → Intent ───────────────────
+
+ha3_base <- lm(f1_intent_n ~ Affective_c * price_c, data = ha3_data)
+rob_test(ha3_base, "Ha3 Base: Affective × Price → F1_intent")
+
+cat(sprintf("  R² = %.4f\n", summary(ha3_base)$r.squared))
+
+# ── 8.3  3-way moderation: adds Employment as second moderator ────────────────
+
+ha3_3way <- lm(f1_intent_n ~ Affective_c * price_c * employment_n, data = ha3_data)
+rob_test(ha3_3way, "Ha3 3-Way: Affective × Price × Employment → F1_intent")
+
+cat(sprintf("  R² = %.4f  |  ΔR² = %.4f\n",
+            summary(ha3_3way)$r.squared,
+            summary(ha3_3way)$r.squared - summary(ha3_base)$r.squared))
+
+# ── 8.4  Model comparison via ANOVA ───────────────────────────────────────────
+
+cat("\n--- Ha3: ANOVA — does adding Employment improve fit? ---\n")
+
+print(anova(ha3_base, ha3_3way))
+
+# ── 8.5  Simple slopes by employment tier ─────────────────────────────────────
+
+# Low = 1–2 (part-time / full-time employed at lower scale)
+
+# High = 5–6 (retired / student — proxy for constrained income)
+
+# simple_slopes <- function(emp_vals, label) {
+#   m <- lm(f1_intent_n ~ Affective_c * price_c,
+#           data = filter(ha3_data, employment_n %in% emp_vals))
+#   rob_test(m, paste("Simple slopes —", label))
+# }
+# 
+# simple_slopes(1:2, "Lower employment tier")
+# simple_slopes(5:7, "Higher/non-employment tier")
+
+# ── 8.6  Johnson-Neyman interval ─────────────────────────────────────────────
+
+cat("\n--- Ha3: Johnson-Neyman — where is price moderation significant? ---\n")
+
+jn <- interactions::johnson_neyman(
+  model = ha3_base, pred = "Affective_c", modx = "price_c", alpha = 0.05
+)
+
+print(jn)
+
+
+
+# ── 8.8  Plot ─────────────────────────────────────────────────────────────────
+
+# interactions::interact_plot(
+#   ha3_3way,
+#   pred        = Affective,
+#   modx        = price_perception_num,
+#   mod2        = employment_n,
+#   modx.values = c(-1, 0, 1),
+#   x.label     = "Affective Emotions (mean-centred)",
+#   y.label     = "Purchase Intention (F1)",
+#   legend.main = "Price Barrier\n(±1 SD)",
+#   main.title  = "Ha3: Affective × Price × Employment → Purchase Intention") +
+#   theme_study()
+
+
+# ggsave("Ha3_price_moderation.png", p_ha3, width = 11, height = 6, dpi = 300)
+
+
+```
+
+## **Hypothesis of Country-Specific Demographic Drivers** 
+
+`Alternative (H₁)`: In both nations, socioeconomic position has a favorable impact on cognitive beliefs and purchase frequency, but it does so through distinct mechanisms—directly in Zimbabwe and indirectly through education and urban residency in Poland.
+
+`Null (H₀)`: Neither country's cognitive views nor purchase frequency are significantly impacted by socioeconomic position.
+
+```{r}
+#| fig-width: 10
+#| fig-height: 8
+#| fig-align: "center"
+
+# 9.  Ha4: COUNTRY-SPECIFIC DEMOGRAPHIC DRIVERS
+#
+#  Hypothesis:
+#    Zimbabwe — SES affects Cognitive Beliefs and Purchase Frequency DIRECTLY
+#    Poland   — SES operates INDIRECTLY via Education & Urban residency → Cognitive
+#
+#  SEP composite = mean(household_econ_n, education_n, employment_n)
+
+
+# ── 9.1  Country subsets ──────────────────────────────────────────────────────
+
+ha4_data <- df |>
+  select(country, SEP, household_econ_n, education_n, employment_n,
+         Cognitive, purchase_freq_n) |>
+   drop_na()
+
+
+df_pol <- filter(ha4_data, country == "Poland")
+
+df_zim <- filter(ha4_data, country == "Zimbabwe")
+
+cat(sprintf("\nHa4: n(Poland) = %d  |  n(Zimbabwe) = %d\n",
+            nrow(df_pol), nrow(df_zim)))
+
+# ── 9.2  OLS by country (baseline robustness check) ──────────────────────────
+
+ols_pol <- lm(purchase_freq_n ~ SEP + education_n + Cognitive, data = df_pol)
+
+ols_zim <- lm(purchase_freq_n ~ SEP + education_n + Cognitive, data = df_zim)
+
+rob_test(ols_pol, 
+         "Ha4 OLS — Poland: SEP + Education + Cognitive → Purchase_Freq")
+
+rob_test(ols_zim, 
+         "Ha4 OLS — Zimbabwe: SEP + Education + Cognitive → Purchase_Freq")
+
+# ── 9.3  Chow structural-break test ──────────────────────────────────────────
+
+ols_pool <- lm(purchase_freq_n ~ SEP + education_n + Cognitive, data = ha4_data)
+
+rss_pool <- sum(resid(ols_pool)^2)
+rss_split <- sum(resid(ols_pol)^2) + sum(resid(ols_zim)^2)
+k  <- length(coef(ols_pool))
+n_total    <- nrow(ha4_data)
+chow_F     <- ((rss_pool - rss_split) / k) / (rss_split / (n_total - 2 * k))
+chow_p     <- pf(chow_F, df1 = k, df2 = n_total - 2 * k, lower.tail = FALSE)
+
+cat(sprintf("\n--- Chow Test: F(%d, %d) = %.4f  p = %.6f ---\n",
+            k, n_total - 2 * k, chow_F, chow_p))
+
+# ── 9.4  Multi-group SEM (free vs constrained) ────────────────────────────────
+
+# The model encodes both country pathways simultaneously.
+
+# Poland pathway: SEP → Education → Cognitive → Purchase (indirect)
+
+# Zimbabwe pathway: SEP → Cognitive & Purchase directly
+
+ha4_sem_spec <- '
+  # Poland mechanism: SEP flows through education to cognitive beliefs
+  education_n    ~ m_edu * SEP
+  # Cognitive beliefs: driven by SEP and (for Poland) education
+  Cognitive      ~ a_sep * SEP + a_edu * education_n
+  # Purchase frequency: direct SEP effect + through cognition
+  purchase_freq_n ~ b_cog * Cognitive + d_sep * SEP
+  # Defined indirect effects
+  indirect_sep_cog  := a_sep * b_cog
+  indirect_edu_path := m_edu * a_edu * b_cog
+  total_indirect    := indirect_sep_cog + indirect_edu_path
+  total_sep_effect  := d_sep + total_indirect
+'
+
+# Free model: all paths estimated separately per country
+
+ha4_free <- sem(ha4_sem_spec, data = ha4_data, 
+                group = "country",
+                estimator = "ML", 
+                se = "bootstrap", bootstrap = 1000,
+                missing = "ml")
+
+# Constrained model: regression paths forced equal across countries (null model)
+
+ha4_const <- sem(ha4_sem_spec, data = ha4_data, group = "country",
+                 group.equal = "regressions",
+                 estimator = "ML", se = "bootstrap", bootstrap = 1000,
+                 missing = "ml")
+
+sem_fit_summary(ha4_free, "Ha4 Free (unconstrained) Model")
+
+cat("\n--- Ha4: Δχ² test — free vs constrained ---\n")
+
+print(lavTestLRT(ha4_free, ha4_const))
+
+# Per-country structural path estimates
+
+pe_free <- parameterEstimates(ha4_free, boot.ci.type = "bca.simple", ci = TRUE) |>
+  filter(op %in% c("~", ":=")) |>
+  select(lhs, op, rhs, group, est, se, pvalue, ci.lower, ci.upper)
+
+cat("\n--- Ha4: Poland paths (group = 1) ---\n")
+
+print(filter(pe_free, group == 1))
+
+cat("\n--- Ha4: Zimbabwe paths (group = 2) ---\n")
+
+print(filter(pe_free, group == 2))
+
+# ── 9.5  Country-specific mediation confirmatory tests ────────────────────────
+
+# Poland: SEP → Education (mediator) → Cognitive → Purchase
+
+cat("\n--- Ha4 Poland: SES → Education → Cognitive (mediation) ---\n")
+
+pol_m <- lm(education_n ~ SEP, data = df_pol)
+pol_y <- lm(Cognitive ~ SEP + education_n, data = df_pol)
+
+ha4_med_pol <- run_mediation(pol_m, pol_y, treat = "SEP", mediator = "education_n",
+                              sims = 1000)
+
+# Zimbabwe: SEP → Cognitive (mediator) → Purchase
+
+cat("\n--- Ha4 Zimbabwe: SES → Cognitive → Purchase (mediation) ---\n")
+
+zim_m <- lm(Cognitive  ~ SEP, data = df_zim)
+zim_y <- lm(purchase_freq_n ~ SEP + Cognitive, data = df_zim)
+
+ha4_med_zim <- run_mediation(zim_m, zim_y, treat = "SEP", mediator = "Cognitive",
+                              sims = 1000)
+
+# ── 9.6  Decision ─────────────────────────────────────────────────────────────
+
+lrt_result <- lavTestLRT(ha4_free, ha4_const)
+delta_p    <- lrt_result[["Pr(>Chisq)"]][2]
+
+cat("\n>>> Ha4 Decision:\n")
+
+cat(sprintf("  Chow test: F = %.4f  p = %.4f  →  %s\n",
+            chow_F, chow_p,
+            if (chow_p < 0.05) "REJECT H\u2080 (structural break confirmed)"
+            else "FAIL TO REJECT H\u2080"))
+
+
+# ── 9.7  Coefficient plot (Poland vs Zimbabwe) ────────────────────────────────
+
+coef_tbl <- bind_rows(
+  tidy(ols_pol, conf.int = TRUE) |> mutate(Country = "Poland"),
+  tidy(ols_zim, conf.int = TRUE) |> mutate(Country = "Zimbabwe")
+) |>
+  filter(term != "(Intercept)") |>
+  mutate(term = recode(term,
+    "SEP"         = "SEP (composite)",
+    "education_n" = "Education",
+    "Cognitive"   = "Cognitive Beliefs"
+  ))
+
+ggplot(coef_tbl,
+                aes(x = estimate, y = term, colour = Country,
+                    xmin = conf.low, xmax = conf.high)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
+  geom_pointrange(position = position_dodge(width = 0.6),
+                  linewidth = 0.8, size = 0.9) +
+  scale_colour_manual(values = COL_COUNTRY) +
+  labs(
+    title    = "Ha4: Demographic Drivers of Purchase Frequency by Country",
+    subtitle = "OLS coefficients ± 95% CI (HC3 robust)",
+    x = "Coefficient estimate", y = NULL
+  ) +
+  theme_study()
+
+# ggsave("Ha4_country_demographic_drivers.png", p_ha4,
+#        width = 9, height = 5, dpi = 300)
+
+
+
+```
+
+## Consolidated Models
+
+```{r}
+modelsummary(
+  list(
+    # Ha1
+    "Aff ~ Cog"        = bk2,
+    "PF ~ Cog + Aff"   = bk3,
+    # Ha2
+    "PF ~ Cert"        = bk2_ha2,
+    "D2 ~ Cert + PF"   = bk3_ha2,
+    # Ha3
+    "Ha3 Base"         = ha3_base,
+    "Ha3 3-Way"        = ha3_3way,
+    # Ha4
+    "Ha4 Poland"       = ols_pol,
+    "Ha4 Zimbabwe"     = ols_zim
+  ),
+  statistic = "({std.error}) [{conf.low}, {conf.high}]",
+  stars     = c("*" = .10, "**" = .05, "***" = .01),
+  vcov      = "HC3",
+  notes     = "HC3 heteroskedasticity-robust standard errors in parentheses; 95% CIs in brackets.",
+  output    = "Hypothesis_Results_Table.docx"
+)
+
+```
